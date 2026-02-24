@@ -9,7 +9,8 @@ const addVideoToQueue = async (video: IVideo): Promise<void> => {
         originalPath: video.originalPath,
         uniqueName: video.uniqueName,
         slug: video.slug,
-        status: video.status
+        status: video.status,
+        extname: video.extname
     }
 
     await videoQueue.add(videoQueueName, jobData, {

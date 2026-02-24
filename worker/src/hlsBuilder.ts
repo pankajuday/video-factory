@@ -5,7 +5,6 @@ import { MEDIA_ROOT } from "./config/constent";
 import type { IMetadata, MetadataWithVideoId, Quality } from "./Types";
 import { Metadata } from "./models/metadata.model";
 
-
 const UPLOADS_DIR = path.join(MEDIA_ROOT, "uploads");
 const VIDEOS_DIR = path.join(MEDIA_ROOT, "videos");
 
@@ -14,7 +13,7 @@ export async function generateHLS(uniqueName: string, videoId: string): Promise<
     throw new Error("Input file path is required.");
   }
 
-  // Normalize full path
+
   const inputFile = path.join(UPLOADS_DIR, uniqueName);
 
   if (!fs.existsSync(inputFile)) {
@@ -155,7 +154,7 @@ export async function generateHLS(uniqueName: string, videoId: string): Promise<
         playlist: `${q.folder}/${baseName}_${q.name}.m3u8`,
       });
     } catch (err: any) {
-      console.error(`❌ FFmpeg failed for ${q.name}: ${err.message}`);
+      console.error(`FFmpeg failed for ${q.name}: ${err.message}`);
       continue;
     }
   }
@@ -175,9 +174,9 @@ export async function generateHLS(uniqueName: string, videoId: string): Promise<
   fs.writeFileSync(masterFile, masterContent);
   console.log(`Master playlist created: ${masterFile}`);
 
-  const metadataFile = `${rootDir}/${baseName}.json`;
-  fs.writeFileSync(metadataFile, JSON.stringify(metadata, null, 2));
-  console.log(`Metadata saved: ${metadataFile}`);
+  // const metadataFile = `${rootDir}/${baseName}.json`;
+  // fs.writeFileSync(metadataFile, JSON.stringify(metadata, null, 2));
+  // console.log(`Metadata saved: ${metadataFile}`);
 
   // Save metadata in MongoDB after writing JSON
  try {
@@ -210,7 +209,7 @@ export async function generateHLS(uniqueName: string, videoId: string): Promise<
   // });
 
   // fs.writeFileSync(globalIndexFile, JSON.stringify(globalIndex, null, 2));
-  // console.log(`📘 Global index updated: ${globalIndexFile}`);
+  // console.log(`Global index updated: ${globalIndexFile}`);
 
   console.log("\nHLS generation completed successfully!");
   // console.log(`Output folder: ${rootDir}`);

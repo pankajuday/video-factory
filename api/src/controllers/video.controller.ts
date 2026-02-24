@@ -5,6 +5,7 @@ import { Video } from "../models/video.model";
 import type { Response, IVideoUploadBody, IAuthRequest, IAuthMulterRequest, IVideo } from "../Types";
 import mongoose from "mongoose";
 import { addVideoToQueue } from "../services/provider.service";
+import path from "path";
 
 
 const videoUpload = asyncHandler(async (req: IAuthMulterRequest, res: Response): Promise<void> => {
@@ -29,11 +30,12 @@ const videoUpload = asyncHandler(async (req: IAuthMulterRequest, res: Response):
     const video = await Video.create({
         title: title.trim(),
         slug,
-        uniqueName: req.file.filename,
+        uniqueName: path.basename(req.file.filename,path.extname(req.file.filename)),
         originalName: req.file.originalname,
         originalPath: req.file.path,
         status: "processing",
         owner: req.user?._id,
+        extname: path.extname(req.file.filename)
     })
 
     if (!video) {

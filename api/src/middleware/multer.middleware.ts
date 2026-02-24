@@ -33,10 +33,14 @@ const allowedVideoTypes: string[] = [
 ];
 
 const fileFilter = (_req: Request, file: Express.Multer.File, cb: FileFilterCallback): void => {
-    if (allowedVideoTypes.includes(file.mimetype)) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (
+        allowedVideoTypes.includes(file.mimetype) &&
+        ext === ".mp4"
+    ) {
         cb(null, true);
     } else {
-        cb(new Error("Invalid file type! Only video files ( mp4 ) are allowed"));
+        cb(new Error("Invalid file type! Only .mp4 video files are allowed"));
     }
 };
 

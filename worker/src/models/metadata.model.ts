@@ -1,6 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import type { MetadataDocument } from "../Types";
 import { Video } from "./video.model";
+import { API_SERVER_HOST_URL } from "../config/env";
 
 const QualitySchema = new Schema(
   {
@@ -85,13 +86,16 @@ const MetadataSchema = new Schema<MetadataDocument>({
 
 // After saving Metadata, update the corresponding Video document
 MetadataSchema.post("save", async function (doc) {
+
+  // const hlsURL = `${API_SERVER_HOST_URL}/videos/${doc.master_playlist.substring(doc.master_playlist.indexOf("/videos/")+8)}`
+
   try {
     await Video.findOneAndUpdate(
       { _id: doc.videoId },
       {
         hlsPath: doc.master_playlist,
         status: "ready",
-        resolutions: doc.qualities.map((q: any) => q.resolution),
+        resolutions: doc.qualities.map((q: any) => q.name),
       }
     );
   } catch (err) {

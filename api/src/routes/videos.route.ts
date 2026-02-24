@@ -6,7 +6,7 @@ import { upload } from "../middleware/multer.middleware";
 const router = Router();
 
 router.route("/upload").post(verifyJWT, upload.single("video"), videoUpload);
-router.route("/all").get(verifyJWT,getVideos);
+router.route("/all").get(getVideos);
 router.route("/:videoId").get(getVideoById)
 
 export default router;
