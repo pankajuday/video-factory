@@ -12,13 +12,13 @@ const videoWorker = () => {
       try {
         console.log(`Processing video: ${job.data.uniqueName}`);
 
-        generateHLS(job.data.uniqueName, job.data.videoId);
+        generateHLS(`${job.data.uniqueName}${job.data.extname}`, job.data.videoId);
 
-        await deleteFile(job.data.uniqueName);
+        await deleteFile(`${job.data.uniqueName}${job.data.extname}`);
 
-        console.log(`Video processing completed: ${job.data.uniqueName}`);
+        console.log(`Video processing completed: ${job.data.uniqueName}${job.data.extname}`);
       } catch (error) {
-        console.error(`Error processing video ${job.data.uniqueName}:`, error);
+        console.error(`Error processing video ${job.data.uniqueName}${job.data.extname}:`, error);
         throw error; 
       }
     },

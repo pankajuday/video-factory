@@ -24,6 +24,10 @@ const VideoSchema = new Schema<IVideo>(
       required: true,
       unique: true,
     },
+    extname:{
+      type: String,
+      required: true,
+    },
     originalName: {
       type: String,
       required: true,

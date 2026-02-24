@@ -99,6 +99,7 @@ export interface IVideo extends Document {
     originalName: string;
     originalPath: string;
     hlsPath?: string;
+    extname: string;
 
     status: VideoStatus;
 
@@ -117,5 +118,11 @@ export interface IVideoJobData{
     originalPath: string,
     uniqueName: string,
     slug: string,
-    status: string
+    status: string,
+    extname: string
+
+}
+
+export interface IHlsParams {
+  videoId: string;
 }

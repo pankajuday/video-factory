@@ -1,0 +1,57 @@
+version: "0.0"
+
+
+services:
+  api:
+    build: ./api
+    container_name: vf_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./api/.env
+    environment:
+      DEV_ENV: production
+    volumes:
+      - media:/media
+    depends_on:
+      - mongodb
+      - redis
+    restart: unless_stopped
+
+  worker:
+    build: ./worker
+    container_name: vf_worker
+    env_file:
+      - ./worker/.env
+    environment:
+      DEV_ENV: production
+    volumes:
+      - media:/media
+    depends_on:
+     - mongodb
+     - redis
+    restart: unless_stopped
+  web:
+    build: ./web
+    container_name: vf_web
+    ports:
+      - "3000:80"
+    restart: unless_stopped
+
+  mongodb:
+    image: mongo
+    volumes:
+      - mongo_data:/data/db
+    restart: unless_stopped
+
+  redis:
+    image: redis
+    volumes:
+      - redis_data:/data
+    restart: unless_stopped
+
+  
+volumes:
+  mongo_data:
+  redis_data:
+  media:

@@ -59,6 +59,7 @@ export interface IVideo extends Document {
     originalName: string;
     originalPath: string;
     hlsPath?: string;
+    extname: string;
 
     status: VideoStatus;
 
