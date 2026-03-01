@@ -7,6 +7,8 @@ RUN bun install --frozen-lockfile
 
 COPY . .
 
-EXPOSE 8000
+RUN bun run build
 
-CMD ["bun", "run", "api:start"]
+EXPOSE 3000
+
+CMD ["bun", "run", "dev:prod"]
