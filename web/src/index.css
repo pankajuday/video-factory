@@ -137,7 +137,7 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   }
 }
 
-.app-main {
+.watch-main {
   display: flex;
   flex-direction: row;
   width: 100%;
@@ -145,7 +145,7 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   gap: 10px;
 }
 
-.app-player {
+.watch-player {
   width: 60%;
   height: fit-content;
   border: solid #424040 2px;
@@ -153,7 +153,7 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   padding: 10px;
 }
 
-.app-side-bar {
+.watch-side-bar {
   width: 40%;
   height: 700px;
   border: solid #424040 2px;
