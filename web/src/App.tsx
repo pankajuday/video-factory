@@ -1,20 +1,18 @@
+import { Route, Routes } from "react-router-dom";
 import "./App.css";
-import VideoPlayer from "./components/VideoPlayer";
-import VideoList from "./components/VideoList";
-import "./index.css";
+import Login from "./components/Login";
+import Register from "./components/Register";
+import WatchPage from "./pages/WatchPage";
+import UploadPage from "./pages/UploadPage";
 
 function App() {
-
   return (
-    <div className="app-main">
-      <div className="app-player">
-        <VideoPlayer  />
-      </div>
-
-      <div className="app-side-bar">
-        <VideoList />
-      </div>
-    </div>
+    <Routes>
+      <Route path="/" element={<WatchPage />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/upload" element={<UploadPage />} />
+    </Routes>
   );
 }
 export default App;
