@@ -95,6 +95,8 @@ const login = asyncHandler(async (req: Request<{}, {}, ILoginBody>, res: Respons
     const options = {
         httpOnly: true,
         secure: true,
+        sameSite: "none" as const,
+        maxAge: 3600000
     };
 
     // return response with cookies

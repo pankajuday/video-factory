@@ -17,6 +17,12 @@ api.interceptors.request.use(
       config.headers = config.headers || {};
       config.headers['Authorization'] = `Bearer ${token}`;
     }
+
+    // Handle FormData - remove Content-Type to let browser set it
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+
     return config;
   },
   (error: AxiosError) => Promise.reject(error)
@@ -26,11 +32,15 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      // Optionally, clear tokens or redirect to login
-      window.alert("Unauthorized. Redirecting to login...");
-      // Example: window.location.href = "/login";
+    const errorData = error.response?.data;
+    const status = error.response?.status;
+    const message = error.response?.statusText;
+
+    if (errorData && typeof errorData === 'object' && 'message' in errorData) {
+      const errorMessage = (errorData as { message: string }).message;
+      window.alert(`${errorMessage} (Status: ${status})` || message);
     }
+
     return Promise.reject(error);
   }
 );
