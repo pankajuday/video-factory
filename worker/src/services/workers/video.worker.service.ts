@@ -2,7 +2,7 @@ import { Worker } from "bullmq";
 import { videoJobName } from "../../config/constent.js";
 import { deleteFile } from "../../utils/fileHandler.js";
 import { generateHLS } from "../../hlsBuilder.js";
-import { connectRedisDB } from "../../db/redis.db.js";
+import { redisOptions } from "../../db/redis.db.js";
 
 
 const videoWorker = () => {
@@ -23,7 +23,7 @@ const videoWorker = () => {
       }
     },
     {
-      connection: connectRedisDB,
+      connection: redisOptions,
       lockDuration: 5 * 60 * 1000, // 5 minutes lock duration for long-running jobs
       stalledInterval: 30000, // check for stalled jobs every 30 seconds
       maxStalledCount: 3, // retry stalled jobs up to 3 times

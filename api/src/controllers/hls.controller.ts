@@ -32,7 +32,6 @@ const hlsVideoServe = asyncHandler(
     if (!video) throw new ApiError(404, "video not found");
 
     const uniqueName = video.uniqueName;
-    const hlsPath = video.hlsPath;
 
     const requestedPath = path.join(
       VIDEOS_DIR,

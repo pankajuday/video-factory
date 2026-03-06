@@ -170,14 +170,25 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   border-radius: 10px;
   background-color: #000;
   width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.player-video-container {
+  width: 100%;
+  max-width: 900px;
+  height: 506px; /* 16:9 aspect ratio for 900px width */
+  background-color: #000;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .player-bottom-bar {
   border: solid 2px #1a1a1a;
   border-radius: 10px;
-  display: "flex";
-  flex-wrap: "wrap";
-  margin-bottom: 12;
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
   flex-direction: row;
   button{
     margin-left:10px;
@@ -188,9 +199,9 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 .player-main {
   text-align: left;
   height: fit-content;
-  max-width: 900;
-  margin: "40px auto";
-  padding: "0 16px";
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 0 16px;
 }
 
 .player-title {
