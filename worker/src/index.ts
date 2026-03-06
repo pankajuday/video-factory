@@ -1,5 +1,5 @@
 import { connectMongoDB } from "./db/mongo.db";
-import { connectRedisDB } from "./db/redis.db";
+import { waitForRedis } from "./db/redis.db";
 import { videoWorker } from "./services/workers/video.worker.service";
 
 async function initializeDatabases() {
@@ -9,22 +9,26 @@ async function initializeDatabases() {
         console.error("MongoDB connection FAILED !!", err);
     }
 
-    connectRedisDB.on("connect", () => {
-        console.log("Redis connected");
-    });
-
-    connectRedisDB.on("error", (err) => {
-        console.error("Redis connection error:", err.message);
-    });
+    try {
+        await waitForRedis();
+        console.log("Redis is ready");
+    } catch (err) {
+        console.error("Redis connection FAILED !!", err);
+    }
 }
 
 async function initializeWorkers() {
     try {
         videoWorker();
+        console.log("Video worker started");
     } catch (error) {
         console.log(error)
     }
 }
 
-initializeDatabases();
-initializeWorkers()
+async function main() {
+    await initializeDatabases();
+    await initializeWorkers();
+}
+
+main();

@@ -8,7 +8,7 @@ import { MEDIA_ROOT } from "./config/constent";
 
 const app = express();
 
-// CORS configuration - handle wildcard with credentials
+// CORS configuration
 const corsOrigin = process.env.CORS_ORIGIN;
 app.use(
     cors({
@@ -22,7 +22,7 @@ app.use(
 app.use(express.json({limit: "20kb"}));
 app.use(express.urlencoded({extended: true, limit: "20kb"}));
 app.use(cookieParser());
-app.use("/hls", express.static(path.join(MEDIA_ROOT, "videos")));
+app.use("/api/v1/hls", express.static(path.join(MEDIA_ROOT, "videos")));
 
 // routes import
 import userRouter from "./routes/user.route";
@@ -35,9 +35,9 @@ import hlsRouter from "./routes/hls.route"
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1", HCRouter);
 app.use("/api/v1/video", uploadVideo)
-app.use("/hls", hlsRouter);
+app.use("/api/v1/hls", hlsRouter);
 
-// global error handler — catches all thrown ApiErrors
+// global error handler
 app.use((err: ApiError | Error, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ApiError) {
         res.status(err.statusCode).json({

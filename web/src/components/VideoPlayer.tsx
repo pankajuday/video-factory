@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
 import "../index.css";
 import { useVideoContext } from "../context/VideoProvider";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 const VideoPlayer = () => {
   const { state } = useVideoContext();
@@ -24,14 +24,14 @@ const VideoPlayer = () => {
         hlsRef.current = null;
       }
     };
+  }, [src]);
+
+  const isNativeHls = useMemo(() => {
+    const video = document.createElement("video");
+    return video.canPlayType("application/vnd.apple.mpegurl") !== "";
   }, []);
 
-  // const isNativeHls = useMemo(() => {
-  //   const video = document.createElement("video");
-  //   return video.canPlayType("application/vnd.apple.mpegurl") !== "";
-  // }, []);
-
-  const attachAndPlay = () => {
+  const attachAndPlay = useCallback(() => {
     setError(null);
     const video = videoRef.current;
 
@@ -64,6 +64,11 @@ const VideoPlayer = () => {
 
         setLevels(nextLevels);
         setCurrentLevel(hls.currentLevel ?? -1);
+        
+        // Play video AFTER manifest is parsed
+        video.play().catch((err) => 
+          setError(err?.message || "Failed to play video")
+        );
       });
 
       hls.on(Hls.Events.ERROR, (_evt, data) => {
@@ -77,23 +82,23 @@ const VideoPlayer = () => {
         hls.destroy();
         hlsRef.current = null;
       });
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    } else if (isNativeHls) {
       video.src = src;
+      // For native HLS, we can play immediately
+      video.play().catch((err) => 
+        setError(err?.message || "Failed to play video")
+      );
     } else {
       setError("HLS is not supported in this browser.");
       return;
     }
-
-    video
-      .play()
-      .catch((err) => setError(err?.message || "Failed to play video"));
-  };
+  },[src, isNativeHls]);
 
   return (
     <div className="player-main">
 
       <div className="player-title">{state.videos[0]?.title}</div>
-      <div>
+      <div className="player-video-container">
         <span>{error}</span>
         <video autoPlay ref={videoRef} controls className="player-video" />
       </div>

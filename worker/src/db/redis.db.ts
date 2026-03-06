@@ -3,8 +3,8 @@ import IORedis from "ioredis";
 import { videoJobName } from "../config/constent";
 import { REDIS_URI, REDIS_PORT } from "../config/env";
 
-// Redis DB connection
-const connectRedisDB = new IORedis({
+// Redis connection options 
+const redisOptions = {
   host: REDIS_URI || "localhost",
   port: Number(REDIS_PORT) || 6379,
   maxRetriesPerRequest: null,
@@ -13,24 +13,32 @@ const connectRedisDB = new IORedis({
     console.log(`Redis reconnecting... attempt ${times}, delay ${delay}ms`);
     return delay;
   },
+};
+
+// Redis DB connection
+const connectRedisDB = new IORedis(redisOptions);
+
+connectRedisDB.on("connect", () => {
+  console.log("Redis connected");
 });
 
-// export const videoQueue = new Queue(videoJobName, {
-//     connection: redisConnection,
-//     defaultJobOptions: {
-//         removeOnComplete: true,
-//         removeOnFail: 50,       // keep last 50 failed jobs for debugging
-//         attempts: 3,            // retry failed jobs 3 times
-//         backoff: {
-//             type: "exponential",
-//             delay: 1000,        // 1s, 2s, 4s
-//         },
-//     },
-// });
+connectRedisDB.on("error", (err) => {
+  console.error("Redis connection error:", err.message);
+});
 
+// Wait for Redis to be ready
+const waitForRedis = (): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (connectRedisDB.status === "ready") {
+      resolve();
+      return;
+    }
+    connectRedisDB.once("ready", () => resolve());
+    connectRedisDB.once("error", (err) => reject(err));
+  });
+};
 
-
-export { connectRedisDB };
+export { connectRedisDB, redisOptions, waitForRedis };
 
 
 

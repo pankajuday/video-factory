@@ -30,6 +30,8 @@ services:
     container_name: vf_web
     ports:
       - "3000:3000"
+    env_file:
+      - ./web/.env.docker
     restart: unless-stopped
 
   mongodb:
