@@ -39,14 +39,13 @@ function VideoList() {
 
     }
     return (
-        <div>
+        <div className="watch-side-list">
             {allVideos.map((d) => (
                 <div className="list-main" key={d._id} onClick={() => addVideoInContext(d._id)}>
-                   
-                     <div className="list-id">
+                    <div className="list-id">
                         <h3 className="list-title">{d.title}</h3>
                         <div className="list-p">
-                            <p >Owner: {d.owner}</p>
+                            <p>Owner: {d.owner}</p>
                             <p>Slug: {d.slug}</p>
                             <p>HLS Path: {d.hlsPath}</p>
                         </div>
