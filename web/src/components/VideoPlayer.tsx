@@ -1,195 +1,216 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Hls from "hls.js";
+import { useEffect, useRef, useState } from "react";
+import videojs from "video.js";
+import "video.js/dist/video-js.css";
 import "../index.css";
 import { useVideoContext } from "../context/VideoProvider";
+import { getHlsManifest } from "../lib/api";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+type QualityOption = {
+  label: string;
+  src: string;
+  height: number;
+};
+
 const VideoPlayer = () => {
   const { state } = useVideoContext();
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const src = `${API_URL}/hls/${state.videos[0]?._id}`;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<any>(null);
+  const [qualityOptions, setQualityOptions] = useState<QualityOption[]>([]);
+  const [selectedQuality, setSelectedQuality] = useState<string>("Auto");
 
-  const [error, setError] = useState<string | null>(null);
-  const [levels, setLevels] = useState<
-    Array<{ index: number; label: string; height?: number; bitrate?: number }>
-  >([]);
-  const hlsRef = useRef<Hls | null>(null);
-  const [currentLevel, setCurrentLevel] = useState<number>(-1);
-  const playRequestIdRef = useRef(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const selectedVideo = state.videos[0];
+  const videoSource = selectedVideo ? `${API_URL}/hls/${selectedVideo._id}` : "";
 
   useEffect(() => {
-    playRequestIdRef.current += 1;
-    setIsLoading(false);
+    if (!selectedVideo || !containerRef.current) {
+      return;
+    }
+
+    if (playerRef.current) {
+      const currentPlayer = playerRef.current;
+      if (!currentPlayer.isDisposed?.()) {
+        currentPlayer.src([{ src: videoSource, type: "application/x-mpegURL" }]);
+      }
+      return;
+    }
+
+    const token = localStorage.getItem("accessToken");
+    const videoElement = document.createElement("video");
+    videoElement.className = "video-js vjs-big-play-centered";
+    videoElement.setAttribute("playsinline", "true");
+    videoElement.setAttribute("controls", "true");
+    containerRef.current.innerHTML = "";
+    containerRef.current.appendChild(videoElement);
+
+    const player: any = videojs(videoElement, {
+      controls: true,
+      preload: "auto",
+      fluid: true,
+      responsive: true,
+      autoplay: false,
+      muted: false,
+      playbackRates: [0.5, 1, 1.25, 1.5, 2],
+      sources: [{ src: videoSource, type: "application/x-mpegURL" }],
+      html5: {
+        vhs: {
+          enableLowInitialPlaylist: true,
+          withCredentials: true,
+          xhrSetup: (xhr: XMLHttpRequest) => {
+            xhr.withCredentials = true;
+            if (token) {
+              xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+            }
+          },
+        },
+      },
+    });
+
+    player.ready(async () => {
+      try {
+        const manifest = await getHlsManifest(selectedVideo._id, token);
+        const options: QualityOption[] = [];
+        let currentHeight: number | null = null;
+        const manifestBaseUrl = `${API_URL}/hls/${selectedVideo._id}/`;
+
+        for (const line of manifest.split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          if (trimmed.startsWith("#EXT-X-STREAM-INF")) {
+            const resMatch = trimmed.match(/RESOLUTION=(\d+)x(\d+)/i);
+            currentHeight = resMatch ? Number(resMatch[2]) : null;
+            continue;
+          }
+
+          if (trimmed.startsWith("#") || !currentHeight) {
+            continue;
+          }
+
+          const resolvedSrc = trimmed.startsWith("http")
+            ? trimmed
+            : new URL(trimmed, manifestBaseUrl).toString();
+
+          options.push({
+            label: `${currentHeight}p`,
+            src: resolvedSrc,
+            height: currentHeight,
+          });
+
+          currentHeight = null;
+        }
+
+        const sorted = [...options].sort((a, b) => a.height - b.height);
+        setQualityOptions(sorted);
+      } catch (error) {
+        console.error("Unable to parse HLS quality levels:", error);
+      }
+    });
+
+    playerRef.current = player;
 
     return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
+      if (playerRef.current && !playerRef.current.isDisposed?.()) {
+        playerRef.current.dispose();
       }
+      playerRef.current = null;
     };
-  }, [src]);
+  }, [selectedVideo, videoSource]);
 
-  const isNativeHls = useMemo(() => {
-    const video = document.createElement("video");
-    return video.canPlayType("application/vnd.apple.mpegurl") !== "";
-  }, []);
+  const changeQuality = (quality: QualityOption) => {
+    if (!playerRef.current) return;
 
-  const safePlay = useCallback(
-    async (video: HTMLVideoElement, requestId: number): Promise<void> => {
-      try {
-        await video.play();
-      } catch (err: any) {
-        const message = err?.message ?? "";
-        const errorName = err?.name ?? "";
-        const interruptedByReload =
-          errorName === "AbortError" ||
-          /interrupted by a new load request/i.test(message);
+    setSelectedQuality(quality.label);
+    playerRef.current.src([{ src: quality.src, type: "application/x-mpegURL" }]);
+    playerRef.current.load();
+    playerRef.current.play().catch(() => undefined);
+  };
 
-        if (interruptedByReload || requestId !== playRequestIdRef.current) {
-          return;
-        }
+  const goAuto = () => {
+    if (!playerRef.current) return;
 
-        setError(message || "Failed to play video");
-      } finally {
-        if (requestId === playRequestIdRef.current) {
-          setIsLoading(false);
-        }
-      }
-    },
-    []
-  );
-
-  const attachAndPlay = useCallback(() => {
-    setError(null);
-    const video = videoRef.current;
-
-    if (!video || !state.videos[0]?._id) {
-      setError("No video selected.");
-      return;
-    }
-
-    setIsLoading(true);
-    const requestId = ++playRequestIdRef.current;
-
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    setLevels([]);
-    setCurrentLevel(-1);
-
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        xhrSetup: (xhr) => {
-          // HLS playlists and segments are protected by cookie authentication.
-          xhr.withCredentials = true;
-        },
-      });
-
-      hlsRef.current = hls;
-      hls.loadSource(src);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (requestId !== playRequestIdRef.current || hlsRef.current !== hls) {
-          return;
-        }
-
-        const nextLevels = hls.levels.map((lvl, index) => ({
-          index,
-          height: lvl.height,
-          bitrate: lvl.bitrate,
-          label: lvl.height ? `${lvl.height}p` : `Level ${index + 1}`,
-        }));
-
-        setLevels(nextLevels);
-        setCurrentLevel(hls.currentLevel ?? -1);
-
-        void safePlay(video, requestId);
-      });
-
-      hls.on(Hls.Events.ERROR, (_evt, data) => {
-        if (requestId !== playRequestIdRef.current || hlsRef.current !== hls) {
-          return;
-        }
-
-        if (data.fatal) {
-          setError(
-            data.details
-              ? `HLS fatal ERROR : ${data.details}`
-              : "HLS fatal ERROR "
-          );
-          setIsLoading(false);
-          hls.destroy();
-          hlsRef.current = null;
-        }
-      });
-    } else if (isNativeHls) {
-      video.src = src;
-      void safePlay(video, requestId);
-    } else {
-      setError("HLS is not supported in this browser.");
-      setIsLoading(false);
-      return;
-    }
-  }, [src, isNativeHls, safePlay, state.videos]);
+    setSelectedQuality("Auto");
+    playerRef.current.src([{ src: videoSource, type: "application/x-mpegURL" }]);
+    playerRef.current.load();
+    playerRef.current.play().catch(() => undefined);
+  };
 
   return (
     <div className="player-main">
-
-      <div className="player-title">{state.videos[0]?.title}</div>
-      <div className="player-video-container">
-        <span>{error}</span>
-        <video ref={videoRef} controls className="player-video" />
+      <div className="player-title">{selectedVideo?.title}</div>
+      <div className="player-video-container" style={{ position: "relative" }}>
+        <div
+          ref={containerRef}
+          className="video-container"
+          style={{ width: "100%", maxWidth: "100%", minHeight: "280px" }}
+        />
       </div>
-      <div className="player-bottom-bar">
 
-        <button className="player-play" onClick={attachAndPlay} disabled={isLoading}>
-          {isLoading ? "Loading..." : "Play"}
-        </button>
-
-
-        {state.videos.length > 0 &&
-          levels.length > 0 &&
-          levels?.map((lvl) => (
-            <button
-              onClick={() => {
-                if (hlsRef.current) {
-                  hlsRef.current.nextLevel = lvl.index;
-                  setCurrentLevel(lvl.index);
-                }
-              }}
-              key={lvl.index}
-              className="resolution-label"
-              style={{
-                backgroundColor:
-                  currentLevel === lvl.index ? "#05bd2dff" : "#000",
-              }}
-            >
-              {lvl.label}
-            </button>
-          ))}
-
-
-        <button
-          onClick={() => {
-            if (hlsRef.current) {
-              hlsRef.current.nextLevel = -1;
-              setCurrentLevel(-1);
-            }
-          }}
+      {selectedVideo && (
+        <div
           style={{
-            backgroundColor: currentLevel === -1 ? "#05bd2dff" : "#000",
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            marginTop: 12,
+            padding: "0 4px",
           }}
         >
-          Auto
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={goAuto}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "none",
+              background: selectedQuality === "Auto" ? "#3b82f6" : "#1f2937",
+              color: "#fff",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            Auto
+          </button>
 
+          {qualityOptions.length > 0 ? (
+            qualityOptions.map((quality) => (
+              <button
+                key={quality.label}
+                type="button"
+                onClick={() => changeQuality(quality)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: selectedQuality === quality.label ? "#22c55e" : "#1f2937",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                {quality.label}
+              </button>
+            ))
+          ) : (
+            <button
+              type="button"
+              disabled
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "none",
+                background: "#374151",
+                color: "#d1d5db",
+                cursor: "not-allowed",
+                fontWeight: 600,
+              }}
+            >
+              Loading…
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };

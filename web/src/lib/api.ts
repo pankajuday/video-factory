@@ -1,7 +1,9 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000/api/v1";
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000/api/v1",
+  baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -45,4 +47,19 @@ api.interceptors.response.use(
   }
 );
 
+const getHlsManifest = async (videoId: string, token?: string | null): Promise<string> => {
+  const authToken = token ?? localStorage.getItem("accessToken");
+  const response = await fetch(`${API_BASE_URL}/hls/${videoId}`, {
+    credentials: "include",
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load HLS manifest: ${response.status}`);
+  }
+
+  return response.text();
+};
+
+export { getHlsManifest };
 export default api;

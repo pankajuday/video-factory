@@ -11,16 +11,20 @@
     "dev:prod": "vite build && vite preview --host --port 3000"
   },
   "dependencies": {
+    "@imagekit/video-player": "^1.0.0-beta.7",
     "@types/react-router-dom": "^5.3.3",
     "axios": "^1.13.5",
     "hls.js": "^1.6.15",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router": "^7.13.1",
-    "react-router-dom": "^7.13.1"
+    "react-router-dom": "^7.13.1",
+    "video.js": "^8.24.2",
+    "videojs-hls-quality-selector": "^2.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
