@@ -2,3 +2,5 @@
 /nginx
 /script
 /media/*
+/.agents
+.agents/*

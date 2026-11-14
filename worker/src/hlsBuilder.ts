@@ -1,27 +1,51 @@
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
-import { MEDIA_ROOT } from "./config/constent";
-import type { IMetadata, MetadataWithVideoId, Quality } from "./Types";
+import type { MetadataWithVideoId, Quality } from "./Types";
 import { Metadata } from "./models/metadata.model";
+import { createTempSpace } from "./utils/tempFile";
+import {
+  downloadObject,
+  hlsPrefix,
+  masterPlaylistKey,
+  uploadHlsDirectory,
+} from "./utils/s3";
 
-const UPLOADS_DIR = path.join(MEDIA_ROOT, "uploads");
-const VIDEOS_DIR = path.join(MEDIA_ROOT, "videos");
-
-export async function generateHLS(uniqueName: string, videoId: string): Promise<void> {
-  if (!uniqueName) {
-    throw new Error("Input file path is required.");
+/**
+ * Download one raw object into an isolated FFmpeg workspace, generate its HLS
+ * files, then upload the complete output directory back to object storage.
+ */
+export async function generateHLS(
+  inputObjectKey: string,
+  uniqueName: string,
+  videoId: string,
+): Promise<void> {
+  if (!inputObjectKey || !uniqueName) {
+    throw new Error("Input object key and video name are required.");
   }
 
+  const tempSpace = await createTempSpace();
 
-  const inputFile = path.join(UPLOADS_DIR, uniqueName);
+  try {
+    const inputFile = path.join(tempSpace.path, `${uniqueName}.mp4`);
+    await downloadObject(inputObjectKey, inputFile);
+    await generateHLSFromFile(inputFile, inputObjectKey, videoId);
+  } finally {
+    await tempSpace.cleanup();
+  }
+}
 
+async function generateHLSFromFile(
+  inputFile: string,
+  inputObjectKey: string,
+  videoId: string,
+): Promise<void> {
   if (!fs.existsSync(inputFile)) {
     throw new Error(`File not found: ${inputFile}`);
   }
 
   const baseName = path.basename(inputFile, path.extname(inputFile));
-  const rootDir = path.join(VIDEOS_DIR, baseName);
+  const rootDir = path.join(path.dirname(inputFile), "videos", baseName);
 
   fs.mkdirSync(rootDir, { recursive: true });
 
@@ -115,11 +139,11 @@ export async function generateHLS(uniqueName: string, videoId: string): Promise<
   const metadata: MetadataWithVideoId = {
     video_name: baseName,
     videoId:videoId,
-    input_file: inputFile,
+    input_file: inputObjectKey,
     duration: `${duration}s`,
     source_resolution: `${srcWidth}x${srcHeight}`,
-    output_root: rootDir,
-    master_playlist: `${rootDir}/${baseName}_multi_quality.m3u8`,
+    output_root: hlsPrefix(baseName),
+    master_playlist: masterPlaylistKey(baseName),
     qualities: [],
   };
 
@@ -174,16 +198,19 @@ export async function generateHLS(uniqueName: string, videoId: string): Promise<
   fs.writeFileSync(masterFile, masterContent);
   console.log(`Master playlist created: ${masterFile}`);
 
+  await uploadHlsDirectory(rootDir, baseName);
+  console.log(`HLS output uploaded to: ${hlsPrefix(baseName)}`);
+
   // const metadataFile = `${rootDir}/${baseName}.json`;
   // fs.writeFileSync(metadataFile, JSON.stringify(metadata, null, 2));
   // console.log(`Metadata saved: ${metadataFile}`);
 
   // Save metadata in MongoDB after writing JSON
- try {
-   await Metadata.create(metadata);
- } catch (error:any) {
-  throw new Error("Metadata fail to save in mongodb",error);
- }
+  try {
+    await Metadata.create(metadata);
+  } catch (error) {
+    throw new Error("Metadata failed to save in MongoDB", { cause: error });
+  }
 
   // Update global master_videos.json under /videos and this is only for local test 
   // const globalIndexFile = `${VIDEOS_DIR}/master_videos.json`;

@@ -1,81 +1,90 @@
+import { Readable } from "node:stream";
 import { asyncHandler } from "../utils/Asynchandler";
-import type { IHlsParams, Request, Response } from "../Types";
+import type { IAuthRequest, Response } from "../Types";
 import { ApiError } from "../utils/ApiError";
 import mongoose from "mongoose";
-import { MEDIA_ROOT } from "../config/constent";
-import path from "path";
-import fs from "fs";
 import { Video } from "../models/video.model";
-const hlsVideoServe = asyncHandler(
-  async (req: Request<{}, {}, IHlsParams>, res: Response): Promise<void> => {
-    /**
-     * Here, we are getting the videoID.
-     * Instead of passing the video path in the parameters,
-     * this approach is more secure and better.
-     * If you allow access to the storage area through params or the URL, the server is not secure and there is a risk of data leakage.
-     * So, just get the videoID, query the database to get the video HLS path, and bind it with the Express server on a secure route with authentication verified.
-     * Only authenticated and authorized users can access the video.
-     *
-     * If possible, implement session-based video serving tokens.
-     */
+import { s3Client } from "../config/s3";
 
-    const { videoId } = req.params as IHlsParams;
-    const VIDEOS_DIR = path.join(MEDIA_ROOT, "videos");
+const HLS_PREFIX = "videos";
 
-    if (!videoId) throw new ApiError(400, "Video id is required");
+const mimeTypes: Record<string, string> = {
+  ".m3u8": "application/vnd.apple.mpegurl",
+  ".ts": "video/mp2t",
+};
 
-    if (!mongoose.isValidObjectId(videoId))
-      throw new ApiError(400, "Invalid video id");
-
-    const video = await Video.findById(videoId);
-
-    if (!video) throw new ApiError(404, "video not found");
-
-    const uniqueName = video.uniqueName;
-
-    const requestedPath = path.join(
-      VIDEOS_DIR,
-      `${uniqueName}`,
-      `${uniqueName}_multi_quality.m3u8`
-    );
-
-    if (!fs.existsSync(requestedPath)) {
-      throw new ApiError(404, "file not found");
-    }
-
-    const ext = path.extname(requestedPath);
-
-    const mimeTypes: Record<string, string> = {
-      ".m3u8": "application/vnd.apple.mpegurl",
-      ".ts": "video/mp2t",
-    };
-
-    res.setHeader("Content-Type", mimeTypes[ext] || "application/octet-stream");
-
-    if (ext === ".m3u8") {
-      res.setHeader("Cache-Control", "no-cache");
-    } else if (ext === ".ts") {
-      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    }
-
-    if (ext === ".m3u8") {
-      const playlist = fs.readFileSync(requestedPath, "utf-8");
-      const rewritten = playlist
-        .split(/\r?\n/)
-        .map((line) => {
-          if (!line || line.startsWith("#")) return line;
-          return `${uniqueName}/${line}`;
-        })
-        .join("\n");
-      res.send(rewritten);
-      return;
-    }
-
-    fs.createReadStream(requestedPath).pipe(res);
+function requestedPath(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value) && value.every((part) => typeof part === "string")) {
+    return value.join("/");
   }
-);
-
-
-export {
-     hlsVideoServe
+  return undefined;
 }
+
+function safeObjectKey(uniqueName: string, childPath?: string): string {
+  const prefix = `${HLS_PREFIX}/${uniqueName}`;
+
+  if (!childPath) return `${prefix}/${uniqueName}_multi_quality.m3u8`;
+
+  const segments = childPath.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+    throw new ApiError(400, "Invalid HLS asset path");
+  }
+
+  return `${prefix}/${segments.join("/")}`;
+}
+
+function publicHlsUrl(videoId: string, assetPath: string): string {
+  const encodedPath = assetPath.split("/").map(encodeURIComponent).join("/");
+  return `/api/v1/hls/${encodeURIComponent(videoId)}/${encodedPath}`;
+}
+
+function rewritePlaylist(playlist: string, videoId: string, currentAssetPath?: string): string {
+  const directory = currentAssetPath?.split("/").slice(0, -1).join("/") ?? "";
+
+  return playlist.split(/\r?\n/).map((line) => {
+    const asset = line.trim();
+    if (!asset || asset.startsWith("#")) return line;
+    return publicHlsUrl(videoId, directory ? `${directory}/${asset}` : asset);
+  }).join("\n");
+}
+
+/** Proxies the authorized video's playlists and segments from the S3 bucket. */
+const hlsVideoServe = asyncHandler(async (req: IAuthRequest, res: Response): Promise<void> => {
+  const { videoId } = req.params;
+  const childPath = requestedPath(req.params.objectPath);
+
+  if (!videoId || Array.isArray(videoId) || !mongoose.isValidObjectId(videoId)) {
+    throw new ApiError(400, "Valid video id is required");
+  }
+
+  const video = await Video.findById(videoId);
+  if (!video) throw new ApiError(404, "Video not found");
+
+  if (!req.user?._id || String(video.owner) !== String(req.user._id)) {
+    throw new ApiError(403, "You are not authorized to view this video");
+  }
+
+  const objectKey = safeObjectKey(video.uniqueName, childPath);
+  const file = s3Client.file(objectKey);
+  if (!(await file.exists())) throw new ApiError(404, "HLS asset not found");
+
+  const extension = objectKey.slice(objectKey.lastIndexOf("."));
+  res.setHeader("Content-Type", mimeTypes[extension] ?? "application/octet-stream");
+
+  if (extension === ".m3u8") {
+    res.setHeader("Cache-Control", "no-cache");
+    res.send(rewritePlaylist(await file.text(), videoId, childPath));
+    return;
+  }
+
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  const stream = Readable.fromWeb(file.stream() as never);
+  stream.on("error", (error) => {
+    if (!res.headersSent) res.status(502).end();
+    else res.destroy(error);
+  });
+  stream.pipe(res);
+});
+
+export { hlsVideoServe };
