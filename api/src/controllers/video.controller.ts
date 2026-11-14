@@ -5,9 +5,14 @@ import { Video } from "../models/video.model";
 import type { Response, IVideoUploadBody, IAuthRequest, IAuthMulterRequest, IVideo } from "../Types";
 import mongoose from "mongoose";
 import { addVideoToQueue } from "../services/provider.service";
-import path from "path";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { rawVideoKey } from "../utils/s3PathHandler";
+import { deleteVideo, uploadVideo } from "../utils/s3";
 
-
+/**
+ * Persist the validated multer memory buffer in S3-compatible object storage.
+ */
 const videoUpload = asyncHandler(async (req: IAuthMulterRequest, res: Response): Promise<void> => {
 
     const { title } = req.body as IVideoUploadBody;
@@ -27,24 +32,45 @@ const videoUpload = asyncHandler(async (req: IAuthMulterRequest, res: Response):
         .replace(/\s+/g, "-")
         + "-" + Date.now();
 
-    const video = await Video.create({
-        title: title.trim(),
-        slug,
-        uniqueName: path.basename(req.file.filename,path.extname(req.file.filename)),
-        originalName: req.file.originalname,
-        originalPath: req.file.path,
-        status: "processing",
-        owner: req.user?._id,
-        extname: path.extname(req.file.filename)
-    })
+    const extname = path.extname(req.file.originalname).toLowerCase();
+    const uniqueName = `${Date.now()}_${randomUUID()}`;
+    const filename = `${uniqueName}${extname}`;
+    const originalPath = rawVideoKey(filename);
 
-    if (!video) {
-        throw new ApiError(500, "Something went wrong while uploading the video");
+    try {
+        await uploadVideo(req.file.buffer, originalPath, req.file.mimetype);
+    } catch (error) {
+        console.error("Failed to upload video to object storage:", error);
+        throw new ApiError(502, "Failed to store video upload");
+    }
+
+    let video: IVideo;
+    try {
+        video = await Video.create({
+            title: title.trim(),
+            slug,
+            uniqueName,
+            originalName: req.file.originalname,
+            originalPath,
+            status: "processing",
+            owner: req.user?._id,
+            extname,
+        });
+    } catch (error) {
+        // Do not leave an unreachable upload behind when database creation fails.
+        await deleteVideo(originalPath).catch((cleanupError) => {
+            console.error("Failed to remove orphaned video object:", cleanupError);
+        });
+        throw error;
     }
 
     try {
         await addVideoToQueue(video);
     } catch (error) {
+        await Video.findByIdAndUpdate(video._id, {
+            status: "failed",
+            error: "Failed to add video processing job to queue",
+        });
         throw new ApiError(500, "Failed to add video processing job to queue");
     }
 

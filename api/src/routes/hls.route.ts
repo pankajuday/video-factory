@@ -4,6 +4,7 @@ import { verifyJWT } from "../middleware/auth.middleware";
 
 const router = Router();
 
-router.route("/:videoId").get(hlsVideoServe)
+router.route("/:videoId").get(verifyJWT, hlsVideoServe);
+router.route("/:videoId/*objectPath").get(verifyJWT, hlsVideoServe);
 
 export default router;

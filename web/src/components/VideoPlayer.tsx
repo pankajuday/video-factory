@@ -16,8 +16,13 @@ const VideoPlayer = () => {
   >([]);
   const hlsRef = useRef<Hls | null>(null);
   const [currentLevel, setCurrentLevel] = useState<number>(-1);
+  const playRequestIdRef = useRef(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    playRequestIdRef.current += 1;
+    setIsLoading(false);
+
     return () => {
       if (hlsRef.current) {
         hlsRef.current.destroy();
@@ -31,11 +36,42 @@ const VideoPlayer = () => {
     return video.canPlayType("application/vnd.apple.mpegurl") !== "";
   }, []);
 
+  const safePlay = useCallback(
+    async (video: HTMLVideoElement, requestId: number): Promise<void> => {
+      try {
+        await video.play();
+      } catch (err: any) {
+        const message = err?.message ?? "";
+        const errorName = err?.name ?? "";
+        const interruptedByReload =
+          errorName === "AbortError" ||
+          /interrupted by a new load request/i.test(message);
+
+        if (interruptedByReload || requestId !== playRequestIdRef.current) {
+          return;
+        }
+
+        setError(message || "Failed to play video");
+      } finally {
+        if (requestId === playRequestIdRef.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    []
+  );
+
   const attachAndPlay = useCallback(() => {
     setError(null);
     const video = videoRef.current;
 
-    if (!video) return;
+    if (!video || !state.videos[0]?._id) {
+      setError("No video selected.");
+      return;
+    }
+
+    setIsLoading(true);
+    const requestId = ++playRequestIdRef.current;
 
     if (hlsRef.current) {
       hlsRef.current.destroy();
@@ -48,6 +84,10 @@ const VideoPlayer = () => {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
+        xhrSetup: (xhr) => {
+          // HLS playlists and segments are protected by cookie authentication.
+          xhr.withCredentials = true;
+        },
       });
 
       hlsRef.current = hls;
@@ -55,6 +95,10 @@ const VideoPlayer = () => {
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (requestId !== playRequestIdRef.current || hlsRef.current !== hls) {
+          return;
+        }
+
         const nextLevels = hls.levels.map((lvl, index) => ({
           index,
           height: lvl.height,
@@ -64,35 +108,35 @@ const VideoPlayer = () => {
 
         setLevels(nextLevels);
         setCurrentLevel(hls.currentLevel ?? -1);
-        
-        // Play video AFTER manifest is parsed
-        video.play().catch((err) => 
-          setError(err?.message || "Failed to play video")
-        );
+
+        void safePlay(video, requestId);
       });
 
       hls.on(Hls.Events.ERROR, (_evt, data) => {
+        if (requestId !== playRequestIdRef.current || hlsRef.current !== hls) {
+          return;
+        }
+
         if (data.fatal) {
           setError(
             data.details
               ? `HLS fatal ERROR : ${data.details}`
               : "HLS fatal ERROR "
           );
+          setIsLoading(false);
+          hls.destroy();
+          hlsRef.current = null;
         }
-        hls.destroy();
-        hlsRef.current = null;
       });
     } else if (isNativeHls) {
       video.src = src;
-      // For native HLS, we can play immediately
-      video.play().catch((err) => 
-        setError(err?.message || "Failed to play video")
-      );
+      void safePlay(video, requestId);
     } else {
       setError("HLS is not supported in this browser.");
+      setIsLoading(false);
       return;
     }
-  },[src, isNativeHls]);
+  }, [src, isNativeHls, safePlay, state.videos]);
 
   return (
     <div className="player-main">
@@ -100,12 +144,12 @@ const VideoPlayer = () => {
       <div className="player-title">{state.videos[0]?.title}</div>
       <div className="player-video-container">
         <span>{error}</span>
-        <video autoPlay ref={videoRef} controls className="player-video" />
+        <video ref={videoRef} controls className="player-video" />
       </div>
       <div className="player-bottom-bar">
 
-        <button className="player-play" onClick={attachAndPlay}>
-          Play
+        <button className="player-play" onClick={attachAndPlay} disabled={isLoading}>
+          {isLoading ? "Loading..." : "Play"}
         </button>
 
 

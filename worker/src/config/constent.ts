@@ -1,6 +1,7 @@
-import { DEV_ENV } from "./env";
-
 export const dbName = "VIDEO_FACTORY";
 export const videoQueueName = "VIDEO-PROCESSING";
 export const videoJobName = "TRANSCODE";
-export const MEDIA_ROOT = DEV_ENV === "production" ? "/media" : "/mnt/d/study-mat/project/video-factory/media" ;
+
+// These are object-key prefixes, not local filesystem paths.
+export const RAW_UPLOADS_PREFIX = "uploads";
+export const HLS_VIDEOS_PREFIX = "videos";

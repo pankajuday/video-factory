@@ -1,8 +1,8 @@
 import { Worker } from "bullmq";
 import { videoJobName } from "../../config/constent.js";
-import { deleteFile } from "../../utils/fileHandler.js";
 import { generateHLS } from "../../hlsBuilder.js";
 import { redisOptions } from "../../db/redis.db.js";
+import { deleteObject } from "../../utils/s3.js";
 
 
 const videoWorker = () => {
@@ -12,13 +12,19 @@ const videoWorker = () => {
       try {
         console.log(`Processing video: ${job.data.uniqueName}`);
 
-        generateHLS(`${job.data.uniqueName}${job.data.extname}`, job.data.videoId);
+        await generateHLS(
+          job.data.originalPath,
+          job.data.uniqueName,
+          job.data.videoId,
+        );
 
-        await deleteFile(`${job.data.uniqueName}${job.data.extname}`);
+        // Keep the source object while transcoding is in progress. It is
+        // deleted only after every HLS object and its metadata are persisted.
+        await deleteObject(job.data.originalPath);
 
-        console.log(`Video processing completed: ${job.data.uniqueName}${job.data.extname}`);
+        console.log(`Video processing completed: ${job.data.uniqueName}`);
       } catch (error) {
-        console.error(`Error processing video ${job.data.uniqueName}${job.data.extname}:`, error);
+        console.error(`Error processing video ${job.data.uniqueName}:`, error);
         throw error; 
       }
     },

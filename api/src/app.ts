@@ -1,10 +1,8 @@
 import express from "express";
-import path from "path";
 import cors from "cors"
 import cookieParser from "cookie-parser"
 import type { Request, Response, NextFunction } from "express";
 import { ApiError } from "./utils/ApiError";
-import { MEDIA_ROOT } from "./config/constent";
 
 const app = express();
 
@@ -22,8 +20,6 @@ app.use(
 app.use(express.json({limit: "20kb"}));
 app.use(express.urlencoded({extended: true, limit: "20kb"}));
 app.use(cookieParser());
-app.use("/api/v1/hls", express.static(path.join(MEDIA_ROOT, "videos")));
-
 // routes import
 import userRouter from "./routes/user.route";
 import HCRouter from "./routes/health.route"
